@@ -251,6 +251,7 @@ func (h *MangoHTTPListener) ServeHTTP(res http.ResponseWriter, req *http.Request
 		defer h.NotFoundsServed.Incr(1)
 		// Don't know how to respond to calls to other endpoints
 		http.NotFound(res, req)
+		log.Println("http: not found")
 	}
 }
 
@@ -418,10 +419,11 @@ func (h *MangoHTTPListener) parse(b []byte) error {
 		var timestamp time.Time
 		if t, ok := timesJSON[k]; ok {
 			if t, ok := t.(string); ok {
-				if x, err := strconv.ParseInt(t, 10, 64); err == nil {
+				x, err := strconv.ParseInt(t, 10, 64)
+				if err == nil {
 					timestamp = time.Unix(0, x*int64(time.Millisecond))
 				} else {
-					log.Println("E! Invalid timestamp. Expected Unix UTC millisecond timestamp.")
+					log.Println("E! Invalid timestamp. Expected Unix UTC millisecond timestamp. Error: '%v', given timestamp: '%s'", err, t)
 					continue
 				}
 			}
@@ -441,6 +443,7 @@ func tooLarge(res http.ResponseWriter) {
 	res.Header().Set("X-Influxdb-Version", "1.0")
 	res.WriteHeader(http.StatusRequestEntityTooLarge)
 	res.Write([]byte(`{"error":"http: request body too large"}`))
+	log.Println("http: request body too large")
 }
 
 func badRequest(res http.ResponseWriter) {
@@ -448,6 +451,7 @@ func badRequest(res http.ResponseWriter) {
 	res.Header().Set("X-Influxdb-Version", "1.0")
 	res.WriteHeader(http.StatusBadRequest)
 	res.Write([]byte(`{"error":"http: bad request"}`))
+	log.Println("http: request bad request")
 }
 
 func (h *MangoHTTPListener) getTLSConfig() *tls.Config {
