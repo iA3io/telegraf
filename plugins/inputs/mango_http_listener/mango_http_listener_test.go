@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"sync"
 	"testing"
@@ -48,7 +47,7 @@ var testFields = []*field_t{
 }
 
 const (
-	testMsg = `{"organization":"NUS","Creekwood EZPLC1 - Chlorine Level":"1.4526425409317016@1511899261955","Alpat - Total":"2.0335159E7@1511899274186"}
+	testMsg = `{"organization":"NUS","Creekwood EZPLC1 - Chlorine Level":"1.4526425409317016@1511899261955","Alpat - Total":"-2.0335159E7@1511899274186"}
 `
 
 	testMsgNoNewline = `{"organization":"NUS","Creekwood EZPLC1 - Chlorine Level":"1.4526425409317016@1511899261955","Alpat - Total":"2.0335159E7@1511899274186"}`
@@ -137,11 +136,8 @@ var (
 )
 
 func newTestMangoHTTPListener() *MangoHTTPListener {
-	listener := &MangoHTTPListener{
-		ServiceAddress: ":0",
-		matchValues:    regexp.MustCompile(`"[\w\.]+@`),
-		matchTimes:     regexp.MustCompile(`@\d+"`),
-	}
+	listener := newMangoHTTPListener()
+	listener.ServiceAddress = ":0"
 	setUpTestListener(listener, true, testTagKeys, testFields)
 	return listener
 }
@@ -186,8 +182,8 @@ func newTestMangoHTTPSListener() *MangoHTTPListener {
 		TlsAllowedCacerts: allowedCAFiles,
 		TlsCert:           serviceCertFile,
 		TlsKey:            serviceKeyFile,
-		matchValues:       regexp.MustCompile(`"[\w\.]+@`),
-		matchTimes:        regexp.MustCompile(`@\d+"`),
+		matchValues:       matchValues,
+		matchTimes:        matchTimes,
 	}
 
 	setUpTestListener(listener, true, testTagKeys, testFields)
@@ -288,7 +284,7 @@ func TestWriteHTTP(t *testing.T) {
 		map[string]string{"organization": "NUS", "data_source": "EZPLC1"},
 	)
 	acc.AssertContainsTaggedFields(t, "alpat",
-		map[string]interface{}{"total_production": float64(2.0335159e7)},
+		map[string]interface{}{"total_production": float64(-2.0335159e7)},
 		map[string]string{"organization": "NUS", "data_source": "DigiConnect"},
 	)
 }
