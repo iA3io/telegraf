@@ -34,6 +34,9 @@ const (
 	DEFAULT_MAX_LINE_SIZE = 64 * 1024
 )
 
+var matchValues = regexp.MustCompile(`"[^@"]+@`)
+var matchTimes = regexp.MustCompile(`@[^@"]+"`)
+
 type MangoHTTPListener struct {
 	ServiceAddress string
 	ReadTimeout    internal.Duration
@@ -486,18 +489,22 @@ func (h *MangoHTTPListener) getTLSConfig() *tls.Config {
 	return tlsConf
 }
 
+func newMangoHTTPListener() *MangoHTTPListener {
+	return &MangoHTTPListener{
+		ServiceAddress: ":8186",
+
+		IgnoreKeysWithoutConfig: true,
+		RequireMeasurementName:  true,
+
+		matchValues: matchValues,
+		matchTimes:  matchTimes,
+
+		fields: make(map[string]*field_t),
+	}
+}
+
 func init() {
 	inputs.Add("mango_http_listener", func() telegraf.Input {
-		return &MangoHTTPListener{
-			ServiceAddress: ":8186",
-
-			IgnoreKeysWithoutConfig: true,
-			RequireMeasurementName:  true,
-
-			matchValues: regexp.MustCompile(`"[\w\.]+@`),
-			matchTimes:  regexp.MustCompile(`@\d+"`),
-
-			fields: make(map[string]*field_t),
-		}
+		return newMangoHTTPListener()
 	})
 }
