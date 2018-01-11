@@ -100,6 +100,8 @@ const sampleConfig = `
   ## 0 means to use the default of 536,870,912 bytes (500 mebibytes)
   max_body_size = 0
 
+  ## Include this string as a header in the Mango publisher
+  ## e.g. Headers: Authorization = "shared secret"
   # authorization = "shared secret"
 
   ## Set one or more allowed client CA certificate file names to 
