@@ -49,6 +49,8 @@ type MangoHTTPListener struct {
 	TlsCert           string
 	TlsKey            string
 
+	Authorization string
+
 	TagKeys []string
 	Fields  []*field_t
 	fields  map[string]*field_t
@@ -98,17 +100,15 @@ const sampleConfig = `
   ## 0 means to use the default of 536,870,912 bytes (500 mebibytes)
   max_body_size = 0
 
-  ## Maximum line size allowed to be sent in bytes.
-  ## 0 means to use the default of 65536 bytes (64 kibibytes)
-  max_line_size = 0
+  # authorization = "shared secret"
 
   ## Set one or more allowed client CA certificate file names to 
   ## enable mutually authenticated TLS connections
-  tls_allowed_cacerts = ["/etc/telegraf/clientca.pem"]
+  #tls_allowed_cacerts = ["/etc/telegraf/clientca.pem"]
 
   ## Add service certificate and key
-  tls_cert = "/etc/telegraf/cert.pem"
-  tls_key = "/etc/telegraf/key.pem"
+  #tls_cert = "/etc/telegraf/cert.pem"
+  #tls_key = "/etc/telegraf/key.pem"
 
   ## List of tag names to extract from JSON POSTed by Mango
   # tag_keys = [
@@ -267,9 +267,27 @@ func (h *MangoHTTPListener) serveRoot(res http.ResponseWriter, req *http.Request
 
 	// Error on gzip request bodies
 	body := req.Body
+	if req.Method != "POST" {
+		// Only respond to POST
+		log.Println("http: unsupported method")
+		badMethodRequest(res)
+		return
+	}
 	if req.Header.Get("Content-Encoding") == "gzip" {
+		log.Println("http: unsupported content encoding")
 		defer body.Close()
 		badRequest(res)
+		return
+	}
+	if req.Header.Get("Content-Type") != "application/json" {
+		defer body.Close()
+		badRequest(res)
+		return
+	}
+	if len(h.Authorization) > 0 &&
+		req.Header.Get("Authorization") != h.Authorization {
+		defer body.Close()
+		unauthorizedRequest(res)
 		return
 	}
 	body = http.MaxBytesReader(res, body, h.MaxBodySize)
@@ -289,6 +307,7 @@ func (h *MangoHTTPListener) serveRoot(res http.ResponseWriter, req *http.Request
 		}
 		h.BytesRecv.Incr(int64(n))
 
+		// No bytes read
 		if err == io.EOF {
 			if return400 {
 				badRequest(res)
@@ -443,7 +462,6 @@ func (h *MangoHTTPListener) parse(b []byte) error {
 
 func tooLarge(res http.ResponseWriter) {
 	res.Header().Set("Content-Type", "application/json")
-	res.Header().Set("X-Influxdb-Version", "1.0")
 	res.WriteHeader(http.StatusRequestEntityTooLarge)
 	res.Write([]byte(`{"error":"http: request body too large"}`))
 	log.Println("http: request body too large")
@@ -451,8 +469,21 @@ func tooLarge(res http.ResponseWriter) {
 
 func badRequest(res http.ResponseWriter) {
 	res.Header().Set("Content-Type", "application/json")
-	res.Header().Set("X-Influxdb-Version", "1.0")
 	res.WriteHeader(http.StatusBadRequest)
+	res.Write([]byte(`{"error":"http: bad request"}`))
+	log.Println("http: request bad request")
+}
+
+func badMethodRequest(res http.ResponseWriter) {
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusMethodNotAllowed)
+	res.Write([]byte(`{"error":"http: bad request"}`))
+	log.Println("http: request bad request")
+}
+
+func unauthorizedRequest(res http.ResponseWriter) {
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusUnauthorized)
 	res.Write([]byte(`{"error":"http: bad request"}`))
 	log.Println("http: request bad request")
 }
@@ -491,7 +522,7 @@ func (h *MangoHTTPListener) getTLSConfig() *tls.Config {
 
 func newMangoHTTPListener() *MangoHTTPListener {
 	return &MangoHTTPListener{
-		ServiceAddress: ":8186",
+		ServiceAddress: ":50505",
 
 		IgnoreKeysWithoutConfig: true,
 		RequireMeasurementName:  true,
