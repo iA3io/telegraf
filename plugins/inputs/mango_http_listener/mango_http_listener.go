@@ -197,7 +197,10 @@ func (h *MangoHTTPListener) Start(acc telegraf.Accumulator) error {
 	h.acc = acc
 	h.pool = NewPool(200, h.MaxLineSize)
 
-	tlsConf := h.getTLSConfig()
+	tlsConf, err := h.getTLSConfig()
+	if err != nil {
+		return err
+	}
 
 	server := &http.Server{
 		Addr:         h.ServiceAddress,
@@ -207,7 +210,6 @@ func (h *MangoHTTPListener) Start(acc telegraf.Accumulator) error {
 		TLSConfig:    tlsConf,
 	}
 
-	var err error
 	var listener net.Listener
 	if tlsConf != nil {
 		listener, err = tls.Listen("tcp", h.ServiceAddress, tlsConf)
@@ -488,19 +490,25 @@ func unauthorizedRequest(res http.ResponseWriter) {
 	log.Println("http: request bad request")
 }
 
-func (h *MangoHTTPListener) getTLSConfig() *tls.Config {
+func (h *MangoHTTPListener) getTLSConfig() (*tls.Config, error) {
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: false,
 		Renegotiation:      tls.RenegotiateNever,
 	}
 
-	if len(h.TlsCert) == 0 || len(h.TlsKey) == 0 {
-		return nil
+	if len(h.TlsCert) == 0 && len(h.TlsKey) == 0 {
+		return nil, nil
+	}
+	if len(h.TlsCert) == 0 {
+		return nil, fmt.Errorf("Missing tls_cert")
+	}
+	if len(h.TlsKey) == 0 {
+		return nil, fmt.Errorf("Missing tls_key")
 	}
 
 	cert, err := tls.LoadX509KeyPair(h.TlsCert, h.TlsKey)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	tlsConf.Certificates = []tls.Certificate{cert}
 
@@ -517,7 +525,7 @@ func (h *MangoHTTPListener) getTLSConfig() *tls.Config {
 		tlsConf.ClientCAs = clientPool
 	}
 
-	return tlsConf
+	return tlsConf, nil
 }
 
 func newMangoHTTPListener() *MangoHTTPListener {
